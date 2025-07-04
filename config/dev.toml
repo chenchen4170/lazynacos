@@ -1,0 +1,4 @@
+[nacos]
+url = "http://192.168.200.156:8848"
+username = "your_username"
+password = "your_password"
