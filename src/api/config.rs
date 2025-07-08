@@ -1,3 +1,31 @@
+use crate::resp::config_list_resp::ConfigListResp;
+
+pub async fn list(
+    url: &str,
+    access_token: &str,
+    ns_id: &str,
+) -> Result<ConfigListResp, String> {
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(&format!(
+            "{url}/nacos/v2/cs/history/configs?accessToken={access_token}&namespaceId={ns_id}"
+        ))
+        .send()
+        .await;
+    match resp {
+        Ok(response) => {
+            if response.status().is_success() {
+                let json_resp = response.json::<ConfigListResp>().await.map_err(|e| e.to_string())?;
+                Ok(json_resp)
+            } else {
+                let text_resp = response.text().await.map_err(|e| e.to_string())?;
+                Err(format!("Request failed: {}", text_resp))
+            }
+        }
+        Err(e) => Err(format!("Network error: {}", e)),
+    }
+}
+
 //ns_id 命名空间id，不传表示查询public空间
 pub async fn get(
     url: &str,
@@ -138,6 +166,23 @@ mod tests {
             }
             Err(e) => Err(format!("Login failed: {}", e)),
         }
+    }
+    #[tokio::test]
+    async fn test_list() {
+        let app_config = get_app_config();
+        let access_token = match get_access_token().await {
+            Ok(token) => token,
+            Err(e) => {
+                println!("{}", e);
+                return;
+            }
+        };
+
+        let resp = list(
+            &app_config.nacos.url,
+            &access_token,
+            &"".to_string()).await;
+        assert!(resp.is_ok(), "Failed to list configs: {:?}", resp.err());
     }
 
     #[tokio::test]
