@@ -1,25 +1,60 @@
+use ratatui::crossterm;
+use ratatui::style::{Style, Color};
+use ratatui::widgets::{Block, Borders};
+use tui_textarea::{Input, TextArea};
+
 use crate::api::auth::login;
-use crate::resp::auth_login_resp::AuthLoginResp;
 
 use crate::api::namespace;
-use crate::resp::namespace_list_resp::Namespace;
+use crate::resp::namespace_list_resp::{self, Namespace};
 
 use crate::api::config;
 use crate::resp::config_list_resp::Config;
 
 use crate::config::{load_config, AppConfig};
 
-pub struct App {
-    pub exit: bool,
-    pub current_block: u8,
-    pub current_tab: usize, // 当前选中的标签索引
-    pub namespaces: Vec<Namespace>,
-    pub configs: Vec<Config>, // 假设有一个 configs 字段用于存储配置
-    pub auth_login_resp: AuthLoginResp, // 新增字段，用于保存登录后的 token  
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum AppState {
+    Running,
+    Quitting,
 }
 
-impl App {
-    pub async fn new() -> App {
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum CurrentMenu {
+    Config,
+    Service,
+    Namespace,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum CurrentScreen {
+    Main,
+    NamespaceAdd,
+}
+
+pub struct App<'a> {
+    pub state: AppState,
+    pub current_screen: CurrentScreen,
+    pub current_menu: CurrentMenu,
+    //config
+    pub config_current_tab: usize,
+    pub configs: Vec<Config>,
+
+    // service
+
+    // namespace
+    pub namespaces: Vec<Namespace>,
+    pub namespace_current_line: u8, 
+
+    pub namespace_current_edit_index: usize, 
+
+    //0-id, 1-name, 2-desc
+    pub ns_add_textarea_vec: Vec<TextArea<'a>>,
+
+}
+
+impl App<'_> {
+    pub async fn new() -> App<'static> {
         let app_config: AppConfig = load_config();
         let resp = login(
             &app_config.nacos.url, 
@@ -53,14 +88,46 @@ impl App {
             }
         };
 
+        let mut id_textarea = TextArea::default();
+        id_textarea.set_block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("ns_id(auto generated if empty)"));
+
+        let mut name_textarea = TextArea::default();
+        name_textarea.set_block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("ns_name"));
+
+        let mut desc_textarea = TextArea::default();
+        desc_textarea.set_block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("ns_desc"));
+
+        let mut ns_add_textarea_vec = vec![id_textarea, name_textarea, desc_textarea];
+
         App {
-            exit: false,
-            current_tab: 0,
-            current_block: 1,
-            namespaces: namespaces.data,
+            state: AppState::Running,
+            current_screen: CurrentScreen::Main,
+            current_menu: CurrentMenu::Config,
+
             configs: configs.data,
-            auth_login_resp: auth_resp,
+            config_current_tab: 0,
+
+            namespaces: namespaces.data,
+            namespace_current_line: 0,
+
+            namespace_current_edit_index: 0,
+            ns_add_textarea_vec,
+
         }
+    }
+
+    pub fn handle_input(&mut self, input: Input) {
+        let index = self.namespace_current_edit_index;
+        self.ns_add_textarea_vec[index].input(input);
     }
 
 }

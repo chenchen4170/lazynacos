@@ -9,6 +9,7 @@ use ratatui::{
     },
     Terminal,
 };
+use tui_textarea::{Input, TextArea};
 
 mod app;
 mod ui;
@@ -16,7 +17,7 @@ mod resp;
 mod config;
 mod api;
 use crate::{
-    app::{App},
+    app::{App, AppState},
     ui::ui,
 };
 
@@ -54,25 +55,68 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                 // Skip events that are not KeyEventKind::Press
                 continue;
             }
-            match app.exit {
-                true => {
+            match app.state{
+                AppState::Quitting => {
                     return Ok(true);
                 }
-                false => match key.code {
-                    KeyCode::Char('q') =>{
-                        app.exit = true;
-                        return Ok(true);
+                AppState::Running => match app.current_screen {
+                    app::CurrentScreen::Main => {
+                        match key.code {
+                            KeyCode::Char('q') =>{
+                                app.state = AppState::Quitting;
+                                return Ok(true);
+                            }
+                            KeyCode::Char('1') => {
+                                app.current_menu = app::CurrentMenu::Config;
+                            }
+                            KeyCode::Char('2') => {
+                                app.current_menu = app::CurrentMenu::Service;
+                            }
+                            KeyCode::Char('3') => {
+                                app.current_menu = app::CurrentMenu::Namespace;
+                            }
+                            //namespace
+                            KeyCode::Up | KeyCode::Char('k') => {
+                                if app.current_menu == app::CurrentMenu::Namespace {
+                                    if app.namespace_current_line > 0 {
+                                        app.namespace_current_line -= 1;
+                                    }
+                                }
+                            }
+                            KeyCode::Down | KeyCode::Char('j') => {
+                                if app.current_menu == app::CurrentMenu::Namespace {
+                                    if app.namespace_current_line < (app.namespaces.len() as u8 - 1) {
+                                        app.namespace_current_line += 1;
+                                    }
+                                }
+                            }
+                            KeyCode::Char('a') => {
+                                if app.current_menu == app::CurrentMenu::Namespace {
+                                    app.current_screen = app::CurrentScreen::NamespaceAdd;
+                                }
+                            }
+                            _ => {}
+                        }
                     }
-                    KeyCode::Char('1') => {
-                        app.current_block = 1;
+                    app::CurrentScreen::NamespaceAdd => {
+                        match key.code {
+                            KeyCode::Esc => {
+                                app.namespace_current_edit_index = 0;
+                                app.current_screen = app::CurrentScreen::Main;
+                            }
+                            KeyCode::Tab => {
+                                // 切换输入焦点
+                                app.namespace_current_edit_index = (app.namespace_current_edit_index + 1) % 3;
+                            }
+                            KeyCode::Enter => {
+                                todo!("Handle Enter key in NamespaceAdd screen, submit the form");
+                            }
+                            _ => {
+                                let input = Input::from(key);
+                                app.handle_input(input);
+                            }
+                        }
                     }
-                    KeyCode::Char('2') => {
-                        app.current_block = 2;
-                    }
-                    KeyCode::Char('3') => {
-                        app.current_block = 3;
-                    }
-                    _ => {}
                 }
             }
         }
