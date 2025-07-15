@@ -1,6 +1,6 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout, Position, Rect}, 
-    style::{Color, Style, Stylize}, 
+    style::{Color, Modifier, Style, Stylize}, 
     text::{self, Line, Span, Text}, 
     widgets::{Block, Borders, Clear, List, ListItem, Padding, Paragraph, Tabs, Widget, Wrap}, 
     Frame
@@ -29,9 +29,9 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
     let [config_rect, service_rect, namespace_rect] = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Percentage(33), //config
-            Constraint::Percentage(33), //service
-            Constraint::Percentage(34), //namespace
+            Constraint::Length(3), //config
+            Constraint::Length(3), //service
+            Constraint::Length(3), //namespace
         ])
         .areas(menu_rect);
 
@@ -103,10 +103,10 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
         ])
         .areas(body_rect);
 
-        let titles: Vec<Span> = app.namespaces
+        let titles: Vec<Span> = app.namespace_list
             .iter()
             .map(|ns| Span::styled(
-                ns.namespaceShowName.clone(), 
+                ns.ns_name.clone(), 
                 Style::default()))
             .collect();
         let tabs = Tabs::new(titles)
@@ -124,12 +124,12 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
             format!("{:<20} {:<20} {:<20}", "data_id", "group", "type"),
             Style::default().fg(Color::Yellow),
         ));
-        let config_items: Vec<ListItem> = app.configs
+        let config_items: Vec<ListItem> = app.config_list
             .iter()
             .map(|config| {
                 ListItem::new(Text::styled(
                     format!("{:<20} {:<20} {:<20}", 
-                    config.dataId, config.group, config.type_),
+                    config.data_id, config.group, config.format),
                     Style::default(),
                 ))
             })
@@ -157,23 +157,23 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
             Style::default().fg(Color::Yellow),
         ));
 
-        let namespace_items: Vec<ListItem> = app.namespaces
+        let namespace_items: Vec<ListItem> = app.namespace_list
             .iter()
             .enumerate()
             .map(|(index, namespace)| {
                 let is_selected = index as u8 == app.namespace_current_line;
                 let item_style = if is_selected {
-                    Style::default().bg(Color::Gray)
+                    Style::default().bg(Color::Gray).fg(Color::Black).add_modifier(Modifier::BOLD)
                 } else {
                     Style::default()
                 };
 
                 let content = format!(
                     "{:<20} {:<36} {:<20} {:<15}",
-                    namespace.namespaceShowName,
-                    namespace.namespace,
-                    namespace.namespaceDesc.clone().unwrap_or_else(|| "N/A".to_string()),
-                    format!("{}/{}", namespace.configCount, namespace.quota)
+                    namespace.ns_name,
+                    namespace.ns_id,
+                    namespace.ns_desc.clone().unwrap_or_else(|| "N/A".to_string()),
+                    format!("{}/{}", namespace.config_count, namespace.quota)
                 );
 
                 ListItem::new(Text::raw(content))
@@ -218,40 +218,191 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
     }
 
     // 添加 Namespace 的弹出窗口
-    if app.current_screen == app::CurrentScreen::NamespaceAdd {
+    if app.current_screen == app::CurrentScreen::NamespaceDelete {
         let area = centered_rect(60, 50, frame.area());
         frame.render_widget(Clear, area); //清空背景内容
 
         let popup_block = Block::default()
-            .title("Create Namespace")
-            .borders(Borders::ALL)
+            .borders(Borders::NONE)
             .style(Style::default().bg(Color::DarkGray));
-
         frame.render_widget(popup_block, area);
 
-        let [id_rect, name_rect, desc_rect, hint_rect] = Layout::default()
+        let [title_rect,content_rect, hint_rect] = Layout::default()
             .direction(Direction::Vertical)
-            .margin(1) // popup_chunks与area之间的间距
+            .constraints([
+                Constraint::Length(1), // title row
+                Constraint::Min(3), // content row
+                Constraint::Length(1), // hint row
+            ])
+            .areas(area);
+
+        let title_text = Paragraph::new("Delete Namespace");
+        frame.render_widget(title_text, title_rect);
+
+        let ns_item= &app.namespace_list[app.namespace_current_line as usize];
+        let content_text = Paragraph::new(vec![
+                Line::from(Span::raw("")), //empty line for spacing
+                Line::from(Span::raw("Are you sure you want to delete this namespace?")),
+                Line::from(vec![
+                    Span::raw("ns_name: "),
+                    Span::styled(&ns_item.ns_name, Style::default().fg(Color::Red)),
+                ]),
+                Line::from(vec![
+                    Span::raw("ns_id: "),
+                    Span::styled(&ns_item.ns_name, Style::default().fg(Color::Red)),
+                ]),
+            ]).block( 
+                Block::default().borders(Borders::BOTTOM)
+            );
+
+        frame.render_widget(content_text, content_rect);
+
+        let hint_text = Paragraph::new(
+            Line::from(vec![
+                Span::raw("esc: cancel, "),
+                Span::raw("y: confirm "),
+                Span::raw("n: cancel")
+            ]));
+        frame.render_widget(hint_text, hint_rect); 
+    }
+    else if app.current_screen == app::CurrentScreen::NamespaceAdd {
+        let area = centered_rect(60, 50, frame.area());
+        frame.render_widget(Clear, area); //清空背景内容
+        let popup_block = Block::default()
+            .borders(Borders::NONE)
+            .style(Style::default().bg(Color::DarkGray));
+        frame.render_widget(popup_block, area);
+
+        let [title_rect, content_rect, hint_rect] = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(1), // title row
+                Constraint::Min(3), // content row
+                Constraint::Length(1), // hint row
+            ]).areas(area);
+   
+        let title_text = Paragraph::new("Add Namespace");
+        frame.render_widget(title_text, title_rect);
+   
+        let [id_rect, name_rect, desc_rect, ] = Layout::default()
+            .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(3), // ns_id row
                 Constraint::Length(3), // ns_name row
                 Constraint::Length(3), // ns_desc row
-                Constraint::Length(1), // hint
             ])
-            .areas(area);
+            .areas(content_rect);
 
         //遍历app.ns_add_textarea_vec，渲染每个TextArea
         for (i, textarea) in app.ns_add_textarea_vec.iter_mut().enumerate() {
             if app.namespace_current_edit_index == i {
-                //fix 改成边框高亮
-                textarea.set_style(Style::default().fg(Color::Green)); // 高亮当前编辑的TextArea
+                textarea.set_block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .style(Style::default().fg(Color::Green))
+                        .title(match i {
+                            0 => "ns_id(auto generated if empty)",
+                            1 => "ns_name",
+                            2 => "ns_desc",
+                            _ => "Unknown",
+                        })
+                );
+                textarea.set_style(Style::default().fg(Color::Reset));
+                textarea.set_cursor_line_style(Style::default());
+                textarea.set_cursor_style(Style::default().add_modifier(Modifier::REVERSED));
             } else {
-                textarea.set_style(Style::default()); // 恢复默认样式
+                textarea.set_block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title(match i {
+                            0 => "ns_id(auto generated if empty)",
+                            1 => "ns_name",
+                            2 => "ns_desc",
+                            _ => "Unknown",
+                        })
+                );
+                textarea.set_style(Style::default().fg(Color::Reset));
+                textarea.set_cursor_line_style(Style::default());
+                textarea.set_cursor_style(Style::default());
             }
             let rect = match i {
                 0 => id_rect,   // ns_id
                 1 => name_rect, // ns_name
                 2 => desc_rect, // ns_desc
+                _ => continue,  // 其他情况不处理
+            };
+            frame.render_widget(&*textarea, rect);
+        }
+
+        let hint_text = Paragraph::new(
+            Line::from(vec![
+                Span::raw("esc: cancel, "),
+                Span::raw("enter: submit, "),
+                Span::raw("tab: switch focus")
+            ]));
+        frame.render_widget(hint_text, hint_rect);
+    }
+    else if app.current_screen == app::CurrentScreen::NamespaceEdit {
+        let area = centered_rect(60, 50, frame.area());
+        frame.render_widget(Clear, area); //清空背景内容
+        let popup_block = Block::default()
+            .borders(Borders::NONE)
+            .style(Style::default().bg(Color::DarkGray));
+        frame.render_widget(popup_block, area);
+
+        let [title_rect, content_rect, hint_rect] = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(1), // title row
+                Constraint::Min(2), // content row
+                Constraint::Length(1), // hint row
+            ]).areas(area);
+   
+        let title_text = Paragraph::new("Edit Namespace");
+        frame.render_widget(title_text, title_rect);
+   
+        let [name_rect, desc_rect] = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3), // ns_name row
+                Constraint::Length(3), // ns_desc row
+            ])
+            .areas(content_rect);
+
+        //遍历app.ns_add_textarea_vec，渲染每个TextArea
+        for (i, textarea) in app.ns_add_textarea_vec.iter_mut().enumerate() {
+            if app.namespace_current_edit_index == i {
+                textarea.set_block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .style(Style::default().fg(Color::Green))
+                        .title(match i {
+                            0 => "ns_name",
+                            1 => "ns_desc", 
+                            _ => "Unknown",
+                        })
+                );
+                textarea.set_style(Style::default().fg(Color::Reset));
+                textarea.set_cursor_line_style(Style::default());
+                textarea.set_cursor_style(Style::default().add_modifier(Modifier::REVERSED));
+            } else {
+                textarea.set_block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title(match i {
+                            0 => "ns_name",
+                            1 => "ns_desc", 
+                            _ => "Unknown",
+                        })
+                );
+                textarea.set_style(Style::default().fg(Color::Reset));
+                textarea.set_cursor_line_style(Style::default());
+                textarea.set_cursor_style(Style::default());
+            }
+            
+            let rect = match i {
+                0 => name_rect, // ns_name
+                1 => desc_rect, // ns_desc
                 _ => continue,  // 其他情况不处理
             };
             frame.render_widget(&*textarea, rect);

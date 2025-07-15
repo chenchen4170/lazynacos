@@ -17,7 +17,7 @@ mod resp;
 mod config;
 mod api;
 use crate::{
-    app::{App, AppState},
+    app::{App, AppState,},
     ui::ui,
 };
 
@@ -31,7 +31,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     // create app and run it
-    let mut app = App::new().await;
+    let mut app = App::new();
     let res = run_app(&mut terminal, &mut app);
 
     // restore terminal
@@ -85,31 +85,71 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
                             }
                             KeyCode::Down | KeyCode::Char('j') => {
                                 if app.current_menu == app::CurrentMenu::Namespace {
-                                    if app.namespace_current_line < (app.namespaces.len() as u8 - 1) {
+                                    if app.namespace_current_line < (app.namespace_list.len() as u8 - 1) {
                                         app.namespace_current_line += 1;
                                     }
                                 }
                             }
+                            KeyCode::Char('d') => {
+                                if app.current_menu == app::CurrentMenu::Namespace {
+                                    app.move_screen_main_to_ns_delete();
+                                }
+                            }
                             KeyCode::Char('a') => {
                                 if app.current_menu == app::CurrentMenu::Namespace {
-                                    app.current_screen = app::CurrentScreen::NamespaceAdd;
+                                    app.move_screen_main_to_ns_add();
+                                }
+                            }
+                            KeyCode::Char('e') => {
+                                if app.current_menu == app::CurrentMenu::Namespace {
+                                    app.move_screen_main_to_ns_edit();
                                 }
                             }
                             _ => {}
                         }
                     }
+                    app::CurrentScreen::NamespaceDelete => {
+                        match key.code {
+                            KeyCode::Esc | KeyCode::Char('n') => {
+                                app.current_screen = app::CurrentScreen::Main;
+                            }
+                            KeyCode::Char('y') => {
+                                app.ns_delete();
+                            }
+                            _ => {
+                                // Handle other keys if necessary
+                            }
+                        }
+                    }
                     app::CurrentScreen::NamespaceAdd => {
                         match key.code {
                             KeyCode::Esc => {
-                                app.namespace_current_edit_index = 0;
-                                app.current_screen = app::CurrentScreen::Main;
+                                app.move_screen_ns_add_to_main();
                             }
                             KeyCode::Tab => {
                                 // 切换输入焦点
                                 app.namespace_current_edit_index = (app.namespace_current_edit_index + 1) % 3;
                             }
                             KeyCode::Enter => {
-                                todo!("Handle Enter key in NamespaceAdd screen, submit the form");
+                                app.ns_add_submit();
+                            }
+                            _ => {
+                                let input = Input::from(key);
+                                app.handle_input(input);
+                            }
+                        }
+                    }
+                    app::CurrentScreen::NamespaceEdit => {
+                        match key.code {
+                            KeyCode::Esc => {
+                                app.move_screen_ns_add_to_main();
+                            }
+                            KeyCode::Tab => {
+                                // 切换输入焦点
+                                app.namespace_current_edit_index = (app.namespace_current_edit_index + 1) % 2;
+                            }
+                            KeyCode::Enter => {
+                                app.ns_edit_submit();
                             }
                             _ => {
                                 let input = Input::from(key);

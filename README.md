@@ -13,4 +13,5 @@ feature:
 
 roadmap:
 
+- 程序异常时恢复终端，更好的panic内容
 
