@@ -163,7 +163,7 @@ pub fn ui(frame: &mut Frame, app: &mut App) {
             .map(|(index, namespace)| {
                 let is_selected = index as u8 == app.namespace_current_line;
                 let item_style = if is_selected {
-                    Style::default().bg(Color::Gray).fg(Color::Black).add_modifier(Modifier::BOLD)
+                    Style::default().bg(Color::Gray).fg(Color::Black)
                 } else {
                     Style::default()
                 };
